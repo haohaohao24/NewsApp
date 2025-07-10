@@ -1,28 +1,35 @@
 package com.java.haoyining.activity;
 
 import android.app.DatePickerDialog;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ProgressBar;
+import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.java.haoyining.R;
 import com.java.haoyining.adapter.NewsAdapter;
 import com.java.haoyining.viewmodel.SearchViewModel;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
 
 public class SearchActivity extends AppCompatActivity {
 
@@ -32,8 +39,9 @@ public class SearchActivity extends AppCompatActivity {
     private TextView startDateTextView, endDateTextView;
     private Button searchButton;
     private RecyclerView recyclerView;
-    private ProgressBar progressBar;
     private NewsAdapter newsAdapter;
+    private SwipeRefreshLayout swipeRefreshLayout;
+    private LinearLayout searchControlsContainer;
 
     private String startDate = "";
     private String endDate = "";
@@ -61,7 +69,8 @@ public class SearchActivity extends AppCompatActivity {
         endDateTextView = findViewById(R.id.search_end_date);
         searchButton = findViewById(R.id.search_button);
         recyclerView = findViewById(R.id.search_recycler_view);
-        progressBar = findViewById(R.id.search_progress_bar);
+        swipeRefreshLayout = findViewById(R.id.search_swipe_refresh);
+        searchControlsContainer = findViewById(R.id.search_controls_container);
     }
 
     private void setupCategorySpinner() {
@@ -79,12 +88,12 @@ public class SearchActivity extends AppCompatActivity {
     private void showDatePickerDialog(final boolean isStartDate) {
         Calendar calendar = Calendar.getInstance();
         DatePickerDialog dialog = new DatePickerDialog(this, (view, year, month, dayOfMonth) -> {
-            String date = String.format("%d-%02d-%02d", year, month + 1, dayOfMonth);
+            String date = String.format(Locale.getDefault(), "%d-%02d-%02d", year, month + 1, dayOfMonth);
             if (isStartDate) {
-                startDate = date;
+                this.startDate = date;
                 startDateTextView.setText(date);
             } else {
-                endDate = date;
+                this.endDate = date;
                 endDateTextView.setText(date);
             }
         }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH));
@@ -92,39 +101,97 @@ public class SearchActivity extends AppCompatActivity {
     }
 
     private void setupRecyclerView() {
-        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
+        recyclerView.setLayoutManager(layoutManager);
         newsAdapter = new NewsAdapter(this, new ArrayList<>(), newsData -> {
             Intent intent = new Intent(this, NewsDetailActivity.class);
             intent.putExtra("news_data", newsData);
             startActivity(intent);
         });
         recyclerView.setAdapter(newsAdapter);
+
+        swipeRefreshLayout.setOnRefreshListener(() -> viewModel.refresh());
+
+        recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+                if (dy > 0) {
+                    int visibleItemCount = layoutManager.getChildCount();
+                    int totalItemCount = layoutManager.getItemCount();
+                    int firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition();
+
+                    if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount - 3) {
+                        viewModel.loadMore();
+                    }
+                }
+            }
+        });
     }
 
     private void setupObservers() {
         viewModel.getSearchResults().observe(this, newsDataList -> {
-            if (newsDataList != null) {
-                newsAdapter.setNews(newsDataList);
-                if (newsDataList.isEmpty()) {
-                    Toast.makeText(this, "没有找到相关新闻", Toast.LENGTH_SHORT).show();
-                }
-            } else {
-                Toast.makeText(this, "搜索失败，请检查网络", Toast.LENGTH_SHORT).show();
+            newsAdapter.setNews(newsDataList);
+            if (newsDataList != null && !newsDataList.isEmpty() && searchControlsContainer.getVisibility() == View.VISIBLE) {
+                searchControlsContainer.setVisibility(View.GONE);
             }
         });
 
         viewModel.getIsLoading().observe(this, isLoading -> {
-            progressBar.setVisibility(isLoading ? View.VISIBLE : View.GONE);
+            swipeRefreshLayout.setRefreshing(isLoading);
             searchButton.setEnabled(!isLoading);
+        });
+
+        viewModel.getToastMessage().observe(this, message -> {
+            if (message != null && !message.isEmpty()) {
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+            }
         });
     }
 
     private void performSearch() {
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            imm.hideSoftInputFromWindow(keywordEditText.getWindowToken(), 0);
+        }
+
         String keyword = keywordEditText.getText().toString().trim();
         String category = categorySpinner.getSelectedItem().toString();
 
-        String finalEndDate = endDate.isEmpty() ? "" : endDate + " 23:59:59";
+        String finalEndDate = this.endDate;
 
-        viewModel.searchNews(50, 1, startDate, finalEndDate, keyword, category);
+        // --- 关键修复：处理各种空搜索的情况，确保endDate的正确性 ---
+        boolean noKeywords = keyword.isEmpty();
+        boolean noStartDate = this.startDate.isEmpty();
+        boolean noEndDate = finalEndDate.isEmpty();
+        boolean isAllCategory = "全部".equals(category);
+
+        // Case 1: 所有都为空 (空搜索) -> 查最新
+        // Case 2: 只选了分类，其他都为空 -> 查该分类最新，以匹配首页行为
+        if (noKeywords && noStartDate && noEndDate && !isAllCategory) {
+            finalEndDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+            Toast.makeText(this, "查找“" + category + "”分类最新新闻", Toast.LENGTH_SHORT).show();
+        } else if (noKeywords && noStartDate && noEndDate && isAllCategory) {
+            finalEndDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+            Toast.makeText(this, "未指定条件，载入最新新闻", Toast.LENGTH_SHORT).show();
+        } else {
+            // 对于其他搜索情况，如果用户只选了日期没选时间，则补充到当天最后一秒
+            if (!finalEndDate.isEmpty() && !finalEndDate.contains(":")) {
+                finalEndDate += " 23:59:59";
+            }
+        }
+        // --- 修复结束 ---
+
+        viewModel.performNewSearch(this.startDate, finalEndDate, keyword, category);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (searchControlsContainer.getVisibility() == View.GONE) {
+            searchControlsContainer.setVisibility(View.VISIBLE);
+            viewModel.clearSearchResults();
+        } else {
+            super.onBackPressed();
+        }
     }
 }

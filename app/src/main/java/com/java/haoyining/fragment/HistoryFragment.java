@@ -1,5 +1,6 @@
 package com.java.haoyining.fragment;
 
+import android.app.Application;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -33,22 +34,29 @@ public class HistoryFragment extends Fragment {
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        viewModel = new ViewModelProvider(this).get(ProfileViewModel.class);
+        // 因为ProfileViewModel继承自AndroidViewModel，需要Application上下文，所以必须这样创建
+        Application application = requireActivity().getApplication();
+        viewModel = new ViewModelProvider(this, new ViewModelProvider.AndroidViewModelFactory(application))
+                .get(ProfileViewModel.class);
     }
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        // 确保加载的是包含Toolbar和RecyclerView的正确布局文件
         View view = inflater.inflate(R.layout.fragment_list_display, container, false);
 
+        // 从加载的视图中查找控件
         Toolbar toolbar = view.findViewById(R.id.toolbar);
-        toolbar.setTitle("历史记录");
-        toolbar.setNavigationOnClickListener(v -> getParentFragmentManager().popBackStack());
-
         RecyclerView recyclerView = view.findViewById(R.id.list_recycler_view);
-        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        // 点击列表项，同样可以跳转到详情页
+        // 设置Toolbar
+        toolbar.setTitle("历史记录");
+        toolbar.setNavigationIcon(R.drawable.ic_arrow_back); // 确保你有这个返回图标
+        toolbar.setNavigationOnClickListener(v -> requireActivity().finish());
+
+        // 设置RecyclerView
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         newsAdapter = new NewsAdapter(getContext(), new ArrayList<>(), newsData -> {
             Intent intent = new Intent(getActivity(), NewsDetailActivity.class);
             intent.putExtra("news_data", newsData);
@@ -56,24 +64,16 @@ public class HistoryFragment extends Fragment {
         });
         recyclerView.setAdapter(newsAdapter);
 
+        // 观察数据变化
         viewModel.getHistoryNews().observe(getViewLifecycleOwner(), this::updateUI);
 
         return view;
     }
 
-    // 将从数据库查出的NewsEntity列表，转换为Adapter需要的NewsData列表
     private void updateUI(List<NewsEntity> entities) {
-        List<NewsData> newsDataList = entities.stream().map(entity -> {
-            NewsData data = new NewsData();
-            data.setNewsID(entity.getNewsID());
-            data.setTitle(entity.getTitle());
-            data.setPublisher(entity.getPublisher());
-            data.setPublishTime(entity.getPublishTime());
-            data.setImage(entity.getImage());
-            data.setContent(entity.getContent());
-            data.setVideo(entity.getVideo());
-            return data;
-        }).collect(Collectors.toList());
+        List<NewsData> newsDataList = entities.stream()
+                .map(NewsEntity::toNewsData)
+                .collect(Collectors.toList());
         newsAdapter.setNews(newsDataList);
     }
 }

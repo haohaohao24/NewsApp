@@ -29,7 +29,14 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
         </activity>
+        <activity android:name=".activity.HistoryActivity" />
+        <activity
+            android:name=".activity.FullScreenImageActivity"
+            android:theme="@style/Theme.AppCompat.NoActionBar"/>
+
+        <activity android:name=".activity.CategoryActivity" />
     </application>
 
 </manifest>

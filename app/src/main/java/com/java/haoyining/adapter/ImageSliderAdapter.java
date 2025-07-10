@@ -14,17 +14,21 @@ import com.java.haoyining.R;
 
 import java.util.List;
 
-/**
- * 用于详情页顶部图片画廊的适配器 (Adapter)
- */
 public class ImageSliderAdapter extends RecyclerView.Adapter<ImageSliderAdapter.ImageSliderViewHolder> {
 
     private final Context context;
     private final List<String> imageUrls;
+    private final OnImageClickListener listener;
 
-    public ImageSliderAdapter(Context context, List<String> imageUrls) {
+    // **关键修改：定义一个新的点击监听接口**
+    public interface OnImageClickListener {
+        void onImageClick(int position, List<String> urls);
+    }
+
+    public ImageSliderAdapter(Context context, List<String> imageUrls, OnImageClickListener listener) {
         this.context = context;
         this.imageUrls = imageUrls;
+        this.listener = listener;
     }
 
     @NonNull
@@ -37,11 +41,18 @@ public class ImageSliderAdapter extends RecyclerView.Adapter<ImageSliderAdapter.
     @Override
     public void onBindViewHolder(@NonNull ImageSliderViewHolder holder, int position) {
         String imageUrl = imageUrls.get(position);
-        // 使用Glide加载图片到ImageView中
         Glide.with(context)
                 .load(imageUrl)
-                .placeholder(R.drawable.ic_image_placeholder) // 加载占位图
+                .placeholder(R.drawable.ic_launcher_background)
+                .error(R.drawable.ic_launcher_background)
                 .into(holder.imageView);
+
+        // **关键修改：使用新的监听器**
+        holder.itemView.setOnClickListener(v -> {
+            if (listener != null) {
+                listener.onImageClick(holder.getAdapterPosition(), imageUrls);
+            }
+        });
     }
 
     @Override

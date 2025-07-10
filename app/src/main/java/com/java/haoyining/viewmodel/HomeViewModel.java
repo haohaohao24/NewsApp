@@ -9,6 +9,7 @@ import com.java.haoyining.api.ApiService;
 import com.java.haoyining.api.RetrofitClient;
 import com.java.haoyining.model.NewsData;
 import com.java.haoyining.model.NewsResponse;
+import com.java.haoyining.util.CategoryManager;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -23,67 +24,77 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
-/**
- * 共享的、唯一的“中央数据大脑”
- * 它拥有一个无参数的构造函数，可以被ViewModelProvider正确创建。
- */
 public class HomeViewModel extends ViewModel {
 
-    // 这些LiveData是给UI看的“公告板”
     private final MutableLiveData<List<NewsData>> newsListLiveData = new MutableLiveData<>();
     private final MutableLiveData<Boolean> isLoading = new MutableLiveData<>(false);
     private final MutableLiveData<String> toastMessage = new MutableLiveData<>();
-
-    // 这是“中央大脑”的“记忆柜”，用Map给每个分类一个专属“小抽屉”
     private final Map<String, CategoryDataState> categoryCache = new HashMap<>();
-    private String activeCategory = null; // 当前激活的分类
-    private Call<NewsResponse> currentCall; // 当前正在进行的网络请求
 
-    // 内部类，定义了每个“小抽屉”里要存放的东西
+    // [核心改造] activeCategory现在存储的是API请求参数（如“娱乐”或“”），而不是UI显示的名称
+    private String activeCategoryParam = null;
+    private Call<NewsResponse> currentCall;
+
     private static class CategoryDataState {
         List<NewsData> newsList = new ArrayList<>();
         int currentPage = 1;
-        int totalCount = 0;
         boolean hasLoadedAll = false;
+        void reset() {
+            newsList.clear();
+            currentPage = 1;
+            hasLoadedAll = false;
+        }
     }
 
     // --- 公开给UI层使用的方法 ---
     public LiveData<List<NewsData>> getNewsList() { return newsListLiveData; }
     public LiveData<Boolean> getIsLoading() { return isLoading; }
     public LiveData<String> getToastMessage() { return toastMessage; }
-    public String getActiveCategory() { return activeCategory; }
+    public String getActiveCategory() { return activeCategoryParam; }
+
+    public void onToastMessageShown() {
+        toastMessage.setValue(null);
+    }
 
     /**
      * 当用户切换分类时，由HomeFragment调用
+     * @param categoryName UI上显示的分类名，如 "全部", "娱乐"
      */
-    public void loadCategory(String category) {
-        if (Objects.equals(category, activeCategory)) return; // 如果是同一个分类，不重复加载
+    public void loadCategory(String categoryName) {
+        String categoryParam = CategoryManager.FIXED_CATEGORY.equals(categoryName) ? "" : categoryName;
 
-        // 取消上一个分类还没完成的请求，防止数据串线
+        // 如果分类没变，且已有数据，则不重复加载
+        if (Objects.equals(categoryParam, activeCategoryParam) && newsListLiveData.getValue() != null && !newsListLiveData.getValue().isEmpty()) {
+            return;
+        }
+
         if (currentCall != null && !currentCall.isCanceled()) {
             currentCall.cancel();
         }
 
-        this.activeCategory = category;
-        CategoryDataState state = categoryCache.get(category);
+        this.activeCategoryParam = categoryParam;
+        CategoryDataState state = categoryCache.get(categoryParam);
 
-        if (state != null) {
-            // 如果这个分类的“小抽屉”里有数据，直接显示
-            newsListLiveData.setValue(state.newsList);
+        if (state != null && !state.newsList.isEmpty()) {
+            newsListLiveData.setValue(new ArrayList<>(state.newsList));
         } else {
-            // 如果是全新的分类，加载第一页
             refresh();
         }
     }
 
     public void refresh() {
+        if (activeCategoryParam == null) return;
+        CategoryDataState state = categoryCache.get(activeCategoryParam);
+        if (state != null) {
+            state.reset();
+        }
         fetchNews(1);
     }
 
     public void loadMore() {
-        if (Boolean.TRUE.equals(isLoading.getValue())) return;
+        if (Boolean.TRUE.equals(isLoading.getValue()) || activeCategoryParam == null) return;
 
-        CategoryDataState state = categoryCache.get(activeCategory);
+        CategoryDataState state = categoryCache.get(activeCategoryParam);
         if (state != null && state.hasLoadedAll) {
             toastMessage.setValue("已经到底啦！");
             return;
@@ -95,12 +106,11 @@ public class HomeViewModel extends ViewModel {
     private void fetchNews(final int page) {
         isLoading.setValue(true);
 
-        // 如果是第一页，就创建一个新的“小抽屉”
         if (page == 1) {
-            categoryCache.put(activeCategory, new CategoryDataState());
+            categoryCache.put(activeCategoryParam, new CategoryDataState());
         }
-        final CategoryDataState state = categoryCache.get(activeCategory);
-        if (state == null) { // 安全检查
+        final CategoryDataState state = categoryCache.get(activeCategoryParam);
+        if (state == null) {
             isLoading.setValue(false);
             return;
         }
@@ -108,28 +118,33 @@ public class HomeViewModel extends ViewModel {
         ApiService apiService = RetrofitClient.getClient().create(ApiService.class);
         String endDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
 
-        final String categoryToFetch = this.activeCategory;
+        final String categoryToFetch = this.activeCategoryParam;
         currentCall = apiService.getNews(15, page, "", endDate, "", categoryToFetch);
         currentCall.enqueue(new Callback<NewsResponse>() {
             @Override
             public void onResponse(@NonNull Call<NewsResponse> call, @NonNull Response<NewsResponse> response) {
-                if (call.isCanceled() || !Objects.equals(categoryToFetch, activeCategory)) return;
+                if (call.isCanceled() || !Objects.equals(categoryToFetch, activeCategoryParam)) {
+                    return;
+                }
 
                 if (response.isSuccessful() && response.body() != null) {
                     List<NewsData> fetchedNews = response.body().getData();
-                    if (fetchedNews != null && !fetchedNews.isEmpty()) {
-                        state.newsList.addAll(fetchedNews);
-                        state.totalCount = response.body().getTotal();
-                        state.currentPage = page;
-                        if (state.newsList.size() >= state.totalCount) {
-                            state.hasLoadedAll = true;
-                        }
-                    } else {
-                        state.hasLoadedAll = true; // 没有返回数据，也认为到底了
+                    if (page == 1) {
+                        state.newsList.clear();
                     }
+                    if (fetchedNews != null) {
+                        state.newsList.addAll(fetchedNews);
+                    }
+
+                    state.currentPage = page;
+                    if (fetchedNews == null || fetchedNews.isEmpty() || fetchedNews.size() < 15) {
+                        state.hasLoadedAll = true;
+                    }
+
                     newsListLiveData.setValue(new ArrayList<>(state.newsList));
+
                 } else {
-                    toastMessage.setValue("加载失败");
+                    toastMessage.setValue("加载失败，请稍后重试");
                 }
                 isLoading.setValue(false);
             }
@@ -138,7 +153,7 @@ public class HomeViewModel extends ViewModel {
             public void onFailure(@NonNull Call<NewsResponse> call, @NonNull Throwable t) {
                 if (call.isCanceled()) return;
                 isLoading.setValue(false);
-                toastMessage.setValue("网络错误");
+                toastMessage.setValue("网络连接失败");
             }
         });
     }

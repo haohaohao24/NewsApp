@@ -4,6 +4,8 @@ import androidx.annotation.NonNull;
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 
+import com.java.haoyining.model.NewsData;
+
 @Entity(tableName = "news_history")
 public class NewsEntity {
 
@@ -19,7 +21,7 @@ public class NewsEntity {
     private String video;
     private boolean isRead;
     private boolean isFavorite;
-    private String summary; // AI生成的摘要
+    private String summary;
 
     public NewsEntity(@NonNull String newsID, String title, String publisher, String publishTime, String image, String content, String video) {
         this.newsID = newsID;
@@ -31,9 +33,10 @@ public class NewsEntity {
         this.video = video;
         this.isRead = false;
         this.isFavorite = false;
-        this.summary = ""; // 默认摘要为空
+        this.summary = "";
     }
 
+    // --- Getters and Setters ---
     @NonNull
     public String getNewsID() { return newsID; }
     public void setNewsID(@NonNull String newsID) { this.newsID = newsID; }
@@ -55,4 +58,20 @@ public class NewsEntity {
     public void setFavorite(boolean favorite) { this.isFavorite = favorite; }
     public String getSummary() { return summary; }
     public void setSummary(String summary) { this.summary = summary; }
+
+    /**
+     * 将数据库实体对象转换为UI数据对象
+     * @return 一个NewsData实例
+     */
+    public NewsData toNewsData() {
+        NewsData data = new NewsData();
+        data.setNewsID(this.getNewsID());
+        data.setTitle(this.getTitle());
+        data.setPublisher(this.getPublisher());
+        data.setPublishTime(this.getPublishTime());
+        data.setImage(this.getImage());
+        data.setContent(this.getContent());
+        data.setVideo(this.getVideo());
+        return data;
+    }
 }

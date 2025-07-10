@@ -4,13 +4,14 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
-import com.google.android.material.card.MaterialCardView;
 import com.java.haoyining.R;
+import com.java.haoyining.activity.HistoryActivity; // **关键修复：导入正确的Activity**
 
 public class ProfileFragment extends Fragment {
 
@@ -19,22 +20,17 @@ public class ProfileFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_profile, container, false);
 
-        MaterialCardView historyCard = view.findViewById(R.id.card_history);
-        MaterialCardView favoritesCard = view.findViewById(R.id.card_favorites);
+        Button historyButton = view.findViewById(R.id.btn_history);
+        Button favoritesButton = view.findViewById(R.id.btn_favorites);
 
-        historyCard.setOnClickListener(v -> {
-            // 使用Fragment管理器进行跳转
-            getParentFragmentManager().beginTransaction()
-                    .replace(R.id.main_container, new HistoryFragment())
-                    .addToBackStack(null) // 允许用户按返回键回到这个页面
-                    .commit();
+        historyButton.setOnClickListener(v -> {
+            // **关键修复：调用正确的 HistoryActivity**
+            HistoryActivity.start(requireContext(), HistoryActivity.TYPE_HISTORY);
         });
 
-        favoritesCard.setOnClickListener(v -> {
-            getParentFragmentManager().beginTransaction()
-                    .replace(R.id.main_container, new FavoritesFragment())
-                    .addToBackStack(null)
-                    .commit();
+        favoritesButton.setOnClickListener(v -> {
+            // **关键修复：调用正确的 HistoryActivity**
+            HistoryActivity.start(requireContext(), HistoryActivity.TYPE_FAVORITES);
         });
 
         return view;

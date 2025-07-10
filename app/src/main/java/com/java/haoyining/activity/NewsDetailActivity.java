@@ -27,9 +27,11 @@ import com.java.haoyining.model.NewsData;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -141,10 +143,17 @@ public class NewsDetailActivity extends AppCompatActivity {
             contentTextView.setText("");
         }
 
-        List<String> imageUrls = parseImageUrls(newsData.getImage());
+        // **关键修改：调用新的去重方法**
+        List<String> imageUrls = parseAndDeduplicateImageUrls(newsData.getImage());
         if (!imageUrls.isEmpty()) {
             imageGalleryContainer.setVisibility(View.VISIBLE);
-            ImageSliderAdapter adapter = new ImageSliderAdapter(this, imageUrls);
+            // **关键修改：为Adapter添加点击监听器**
+            ImageSliderAdapter adapter = new ImageSliderAdapter(this, imageUrls, (position, urls) -> {
+                Intent intent = new Intent(this, FullScreenImageActivity.class);
+                intent.putStringArrayListExtra(FullScreenImageActivity.EXTRA_IMAGE_URLS, new ArrayList<>(urls));
+                intent.putExtra(FullScreenImageActivity.EXTRA_IMAGE_POSITION, position);
+                startActivity(intent);
+            });
             imageViewPager.setAdapter(adapter);
 
             if (imageUrls.size() > 1) {
@@ -173,6 +182,7 @@ public class NewsDetailActivity extends AppCompatActivity {
         }
     }
 
+    // ... (省略 fetchRealAiSummary, callGlmApi, cacheSummary, initializePlayer, onStop 等未改变的方法)
     private void fetchRealAiSummary(final NewsData newsData) {
         summaryProgressBar.setVisibility(View.VISIBLE);
         summaryTextView.setVisibility(View.GONE);
@@ -198,7 +208,7 @@ public class NewsDetailActivity extends AppCompatActivity {
             String prompt = "请为以下新闻正文生成一段50字左右的摘要：" + newsData.getContent();
             GlmRequest.Message userMessage = new GlmRequest.Message("user", prompt);
 
-            GlmRequest glmRequest = new GlmRequest("glm-4", Collections.singletonList(userMessage), 0.95f, 0.7f, newsData.getNewsID());
+            GlmRequest glmRequest = new GlmRequest("glm-4", Arrays.asList(userMessage), 0.95f, 0.7f, newsData.getNewsID());
 
             Gson gson = new Gson();
             String jsonBody = gson.toJson(glmRequest);
@@ -217,7 +227,6 @@ public class NewsDetailActivity extends AppCompatActivity {
                 final String summary;
                 if (response.isSuccessful() && response.body() != null) {
                     String result = response.body().string();
-                    System.out.println("GLM响应原文：" + result);
                     GlmResponse glmResponse = gson.fromJson(result, GlmResponse.class);
                     if (glmResponse != null && glmResponse.getChoices() != null && !glmResponse.getChoices().isEmpty()) {
                         summary = glmResponse.getChoices().get(0).getMessage().getContent();
@@ -274,8 +283,14 @@ public class NewsDetailActivity extends AppCompatActivity {
         }
     }
 
-    private List<String> parseImageUrls(String rawUrlString) {
-        List<String> urls = new ArrayList<>();
+
+    /**
+     * **关键新增方法：解析并去除重复的图片URL**
+     * 使用LinkedHashSet来保证URL的唯一性，并维持插入顺序。
+     */
+    private List<String> parseAndDeduplicateImageUrls(String rawUrlString) {
+        // 使用Set来自动处理重复项
+        Set<String> urls = new LinkedHashSet<>();
         if (rawUrlString != null && !rawUrlString.trim().isEmpty() && !rawUrlString.trim().equals("[]")) {
             String cleaned = rawUrlString.replace("[", "").replace("]", "").replace("\"", "").trim();
             if (!cleaned.isEmpty()) {
@@ -288,6 +303,6 @@ public class NewsDetailActivity extends AppCompatActivity {
                 }
             }
         }
-        return urls;
+        return new ArrayList<>(urls);
     }
 }
