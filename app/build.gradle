@@ -1,0 +1,84 @@
+plugins {
+    id("com.android.application")
+}
+
+android {
+
+    namespace = "com.java.haoyining"
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "com.java.haoyining"
+        minSdk = 28
+        targetSdk = 35
+        versionCode = 1
+        versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            // *** 这里是唯一的修改 ***
+            // 将 'isMinifyEnabled = false' 修改为 'minifyEnabled false'
+            // 这是新版Gradle的正确语法
+            minifyEnabled false
+            proguardFiles(
+                    getDefaultProguardFile("proguard-android-optimize.txt"),
+                    "proguard-rules.pro"
+            )
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+    buildFeatures {
+        viewBinding = true
+    }
+}
+
+dependencies {
+
+    // 你的依赖库是使用旧的方式，为了统一和避免后续问题，
+    // 我将它改回了使用版本目录(libs.versions.toml)的方式。
+    // 请确保你的 libs.versions.toml 文件内容和我之前提供的一致。
+
+    // --- 默认的基础库 ---
+    implementation(libs.appcompat)
+    implementation(libs.material)
+    implementation(libs.constraintlayout)
+
+    // --- 以下是我们为项目新添加的核心功能库 ---
+
+    // Retrofit & Gson (网络请求)
+    implementation(libs.retrofit)
+    implementation(libs.converter.gson)
+
+    // Glide (图片加载)
+    implementation(libs.glide)
+    implementation libs.activity
+    annotationProcessor(libs.glide.compiler)
+
+    // Room (数据库)
+    implementation(libs.room.runtime)
+    annotationProcessor(libs.room.compiler)
+
+    // ViewModel & LiveData (MVVM)
+    implementation(libs.lifecycle.viewmodel)
+    implementation(libs.lifecycle.livedata)
+    implementation(libs.lifecycle.common.java8)
+
+    // SwipeRefreshLayout (下拉刷新)
+    implementation(libs.swiperefreshlayout)
+
+    // ExoPlayer (视频播放)
+    implementation(libs.exoplayer)
+
+    implementation 'com.google.code.gson:gson:2.9.0' // 确保有这个
+
+    // --- 测试库 ---
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.ext.junit)
+    androidTestImplementation(libs.espresso.core)
+}

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 这是一个shape drawable，用来创建一个带圆角的半透明黑色背景 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#80000000" /> <!-- 半透明黑色 -->
+    <corners android:radius="16dp" />   <!-- 圆角 -->
+</shape>

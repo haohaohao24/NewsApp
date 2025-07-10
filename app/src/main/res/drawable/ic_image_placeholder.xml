@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    这是一个矢量图标(Vector Drawable)，专门用作图片占位符。
+    - 我们用一个方框代表图片的边界。
+    - 里面的山和太阳的轮廓，是图像内容的通用象征。
+    - fillColor 设置为灰色(#CCCCCC)，这是一种常见的设计，表示这是一个临时的、未加载的状态。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#CCCCCC"
+        android:pathData="M21,19V5c0,-1.1 -0.9,-2 -2,-2H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2zM8.5,13.5l2.5,3.01L14.5,12l4.5,6H5l3.5,-4.5z"/>
+</vector>
